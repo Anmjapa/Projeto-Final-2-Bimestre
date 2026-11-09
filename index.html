@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Registre e acompanhe chamados de suporte técnico.">
+  <meta name="theme-color" content="#21183f">
+  <title>Central de Chamados | Fatec Lins</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script src="api.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <svg class="biblioteca-icones" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="i-suporte" viewBox="0 0 24 24">
+      <path d="M3 14v-2a9 9 0 0 1 18 0v2m-18 0v2a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2Zm18 0v2a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2h1a2 2 0 0 1 2 2Zm-2 4a3 3 0 0 1-3 3h-4"/>
+    </symbol>
+    <symbol id="i-ticket" viewBox="0 0 24 24">
+      <path d="M4 6h16a1 1 0 0 1 1 1v3a2 2 0 0 0 0 4v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-3a2 2 0 0 0 0-4V7a1 1 0 0 1 1-1Zm11 0v2m0 3v2m0 3v2"/>
+    </symbol>
+    <symbol id="i-aberto" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="8"/><path d="M12 8v4m0 4h.01"/>
+    </symbol>
+    <symbol id="i-relogio" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>
+    </symbol>
+    <symbol id="i-check" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="8"/><path d="m9 12 2 2 4-4"/>
+    </symbol>
+    <symbol id="i-busca" viewBox="0 0 24 24">
+      <circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4 4"/>
+    </symbol>
+    <symbol id="i-seta" viewBox="0 0 24 24">
+      <path d="m7 10 5 5 5-5"/>
+    </symbol>
+    <symbol id="i-mais" viewBox="0 0 24 24">
+      <path d="M12 5v14M5 12h14"/>
+    </symbol>
+    <symbol id="i-atualizar" viewBox="0 0 24 24">
+      <path d="M19 10a7 7 0 1 0-.8 6M19 5v5h-5"/>
+    </symbol>
+    <symbol id="i-editar" viewBox="0 0 24 24">
+      <path d="m14 6 4 4M4 20l1-5L15.5 4.5a1.5 1.5 0 0 1 2 0l2 2a1.5 1.5 0 0 1 0 2L9 19l-5 1Z"/>
+    </symbol>
+    <symbol id="i-lixeira" viewBox="0 0 24 24">
+      <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5m4-5v5"/>
+    </symbol>
+    <symbol id="i-fechar" viewBox="0 0 24 24">
+      <path d="m6 6 12 12M18 6 6 18"/>
+    </symbol>
+    <symbol id="i-chave" viewBox="0 0 24 24">
+      <path d="M10 14a5 5 0 1 1 4 4l-2 2H9v-3l1-1v-2Zm7-3h.01"/>
+    </symbol>
+  </svg>
+
+  <a class="atalho" href="#principal">Pular para os chamados</a>
+  <header class="topo">
+    <div class="limite topo-conteudo">
+      <a class="marca" href="#principal">
+        <span class="marca-icone"><svg class="icone" aria-hidden="true"><use href="#i-suporte"/></svg></span>
+        <span><strong>Central de Chamados</strong><small>Fatec Lins · ADS</small></span>
+      </a>
+      <div class="conexao-topo">
+        <span id="indicador-conexao" class="indicador" data-modo="offline">Sem conexão</span>
+        <button id="conectar" class="botao secundario" type="button" data-ocupado>
+          <svg class="icone" aria-hidden="true"><use href="#i-chave"/></svg><span>Conectar API</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main id="principal" class="limite principal">
+    <section class="hero" aria-labelledby="titulo">
+      <div class="hero-conteudo">
+        <p class="sobretitulo"><span></span> Painel de suporte</p>
+        <h1 id="titulo">Central de Chamados</h1>
+        <p class="hero-descricao">Registre solicitações de suporte e acompanhe o andamento de cada chamado.</p>
+        <button id="novo-chamado" class="botao hero-botao" type="button" data-ocupado>
+          <svg class="icone" aria-hidden="true"><use href="#i-mais"/></svg> Novo chamado
+        </button>
+      </div>
+      <svg class="hero-arte" viewBox="0 0 426 230" fill="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="ticket-cor" x1="72" y1="24" x2="248" y2="178" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#BDACFF" stop-opacity=".26"/>
+            <stop offset="1" stop-color="#8F75EE" stop-opacity=".08"/>
+          </linearGradient>
+          <pattern id="pontos" width="17" height="17" patternUnits="userSpaceOnUse">
+            <circle cx="2" cy="2" r="1.1" fill="#C9BAFF" opacity=".28"/>
+          </pattern>
+        </defs>
+        <path d="M37 225C140 163 180 81 426 30M57 238C163 183 258 150 447 124M153 229C211 202 303 194 426 188" stroke="#AB91FE" opacity=".15"/>
+        <rect x="123" y="13" width="303" height="213" fill="url(#pontos)"/>
+        <g transform="translate(209 23) rotate(13)">
+          <rect x="0" y="0" width="175" height="101" rx="15" fill="#291E53" stroke="#9379E3" stroke-opacity=".45"/>
+          <path d="M23 24h67m-67 14h42" stroke="#A98CFF" stroke-opacity=".4" stroke-width="4" stroke-linecap="round"/>
+          <circle cx="147" cy="24" r="4" fill="#A98CFF" opacity=".5"/>
+        </g>
+        <g transform="translate(127 69) rotate(-10)">
+          <path d="M16 0h200a16 16 0 0 1 16 16v25a13 13 0 0 0 0 26v25a16 16 0 0 1-16 16H16A16 16 0 0 1 0 92V67a13 13 0 0 0 0-26V16A16 16 0 0 1 16 0Z" fill="url(#ticket-cor)" stroke="#CAB6FF" stroke-opacity=".66"/>
+          <path d="M166 8v92" stroke="#D4C3FF" stroke-opacity=".52" stroke-dasharray="4 6"/>
+          <rect x="29" y="27" width="28" height="28" rx="7" fill="#B999FF" fill-opacity=".26"/>
+          <path d="m37 41 5 5 8-9" stroke="#E5DAFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M70 35h63m-63 13h47M31 76h102" stroke="#DFD0FF" stroke-opacity=".48" stroke-width="4" stroke-linecap="round"/>
+          <path d="M183 43h23m-23 12h17m-17 12h23" stroke="#DFD0FF" stroke-opacity=".46" stroke-width="2" stroke-linecap="round"/>
+        </g>
+        <circle cx="104" cy="53" r="4" fill="#C4ABFF" opacity=".7"/>
+        <circle cx="367" cy="172" r="3" fill="#C4ABFF" opacity=".55"/>
+        <path d="M380 73v12m-6-6h12M93 171v14m-7-7h14" stroke="#C4ABFF" stroke-opacity=".65" stroke-linecap="round"/>
+      </svg>
+    </section>
+
+    <section class="resumo" aria-label="Resumo dos chamados">
+      <article class="metrica">
+        <span class="metrica-icone roxo"><svg class="icone" aria-hidden="true"><use href="#i-ticket"/></svg></span>
+        <div><span class="metrica-rotulo">Total de chamados</span><strong id="total">—</strong></div>
+      </article>
+      <article class="metrica">
+        <span class="metrica-icone ambar"><svg class="icone" aria-hidden="true"><use href="#i-aberto"/></svg></span>
+        <div><span class="metrica-rotulo">Abertos</span><strong id="total-aberto">—</strong></div>
+      </article>
+      <article class="metrica">
+        <span class="metrica-icone azul"><svg class="icone" aria-hidden="true"><use href="#i-relogio"/></svg></span>
+        <div><span class="metrica-rotulo">Em andamento</span><strong id="total-em-andamento">—</strong></div>
+      </article>
+      <article class="metrica">
+        <span class="metrica-icone verde"><svg class="icone" aria-hidden="true"><use href="#i-check"/></svg></span>
+        <div><span class="metrica-rotulo">Concluídos</span><strong id="total-concluido">—</strong></div>
+      </article>
+    </section>
+
+    <section class="painel" aria-labelledby="titulo-lista">
+      <div class="painel-topo">
+        <div class="painel-titulo">
+          <div>
+            <h2 id="titulo-lista">Chamados</h2>
+            <p>Consulte, filtre e gerencie suas solicitações.</p>
+          </div>
+          <button id="atualizar" class="botao secundario" type="button" data-ocupado disabled>
+            <svg class="icone" aria-hidden="true"><use href="#i-atualizar"/></svg> Atualizar
+          </button>
+        </div>
+        <div class="filtros">
+          <label class="filtro busca">
+            <span>Pesquisar</span>
+            <span class="controle com-icone">
+              <svg class="icone" aria-hidden="true"><use href="#i-busca"/></svg>
+              <input id="buscar" type="search" placeholder="Buscar pelo título..." autocomplete="off" disabled>
+            </span>
+          </label>
+          <label class="filtro">
+            <span>Status</span>
+            <span class="controle com-seta">
+              <select id="filtrar-status" disabled>
+                <option value="">Todos os status</option>
+                <option value="aberto">Aberto</option>
+                <option value="em_andamento">Em andamento</option>
+                <option value="concluido">Concluído</option>
+              </select>
+              <svg class="icone" aria-hidden="true"><use href="#i-seta"/></svg>
+            </span>
+          </label>
+          <label class="filtro">
+            <span>Prioridade</span>
+            <span class="controle com-seta">
+              <select id="filtrar-prioridade" disabled>
+                <option value="">Todas</option>
+                <option value="baixa">Baixa</option>
+                <option value="media">Média</option>
+                <option value="alta">Alta</option>
+              </select>
+              <svg class="icone" aria-hidden="true"><use href="#i-seta"/></svg>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <p id="erro-lista" class="erro-inline erro-lista" role="alert" hidden></p>
+      <div id="resultado-lista" aria-busy="false">
+        <div id="carregando-lista" class="estado-lista" role="status" hidden>
+          <span class="spinner" aria-hidden="true"></span><p>Carregando chamados…</p>
+        </div>
+        <div id="lista-vazia" class="estado-lista">
+          <span class="estado-icone"><svg class="icone" aria-hidden="true"><use href="#i-ticket"/></svg></span>
+          <h3 id="vazio-titulo">Conecte-se para ver seus chamados</h3>
+          <p id="vazio-descricao">Use o token da atividade ou explore a interface com dados de exemplo.</p>
+          <div class="estado-acoes">
+            <button id="vazio-conectar" class="botao primario" type="button" data-ocupado>Conectar API</button>
+            <button id="demonstrar" class="botao secundario" type="button" data-ocupado>Ver demonstração</button>
+            <button id="vazio-novo" class="botao primario" type="button" data-ocupado hidden>Novo chamado</button>
+            <button id="limpar-filtros" class="botao secundario" type="button" hidden>Limpar filtros</button>
+            <button id="tentar-novamente" class="botao secundario" type="button" data-ocupado hidden>Tentar novamente</button>
+          </div>
+        </div>
+        <div id="envoltoria-tabela" class="envoltoria-tabela" hidden>
+          <table class="tabela" role="table" aria-label="Lista de chamados">
+            <thead>
+              <tr role="row">
+                <th scope="col">Chamado</th>
+                <th scope="col">Categoria</th>
+                <th scope="col">Prioridade</th>
+                <th scope="col">Status</th>
+                <th scope="col">Criado em</th>
+                <th scope="col">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="lista-chamados" role="rowgroup"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="rodape-lista" class="rodape-lista" hidden>
+        <span id="contagem" role="status"></span>
+        <button id="limpar-filtros-rodape" class="botao texto" type="button" hidden>Limpar filtros</button>
+      </div>
+    </section>
+
+    <footer class="rodape-pagina">
+      <span>Central de Chamados</span><span>Projeto de Análise e Desenvolvimento de Sistemas</span>
+    </footer>
+  </main>
+
+  <template id="modelo-linha">
+    <tr role="row">
+      <td class="celula-chamado" role="cell">
+        <button type="button" class="link-chamado" data-acao="detalhar" data-ocupado></button>
+        <small class="numero-chamado"></small>
+      </td>
+      <td class="celula-categoria" data-coluna="Categoria" role="cell"></td>
+      <td class="celula-prioridade" data-coluna="Prioridade" role="cell"><span class="etiqueta"></span></td>
+      <td class="celula-status" data-coluna="Status" role="cell"><span class="etiqueta"></span></td>
+      <td class="celula-data" data-coluna="Criado em" role="cell"><time></time></td>
+      <td class="celula-acoes" role="cell">
+        <button type="button" class="botao-icone" data-acao="editar" data-ocupado title="Editar">
+          <svg class="icone" aria-hidden="true"><use href="#i-editar"/></svg>
+        </button>
+        <button type="button" class="botao-icone botao-excluir" data-acao="excluir" data-ocupado title="Excluir">
+          <svg class="icone" aria-hidden="true"><use href="#i-lixeira"/></svg>
+        </button>
+      </td>
+    </tr>
+  </template>
+
+  <dialog id="dialog-conexao" aria-labelledby="titulo-conexao">
+    <form id="form-conexao">
+      <header class="dialog-topo">
+        <div><p class="dialog-sobretitulo">Acesso</p><h2 id="titulo-conexao">Conectar à API</h2></div>
+        <button type="button" class="botao-icone" aria-label="Fechar" data-fechar data-ocupado>
+          <svg class="icone" aria-hidden="true"><use href="#i-fechar"/></svg>
+        </button>
+      </header>
+      <div class="dialog-corpo">
+        <label class="campo">
+          <span>Token da atividade</span>
+          <input id="token" name="token" type="password" required autocomplete="off" autocapitalize="off"
+                 spellcheck="false" placeholder="Cole o token de 64 caracteres" aria-describedby="ajuda-token" data-ocupado autofocus>
+        </label>
+        <p id="ajuda-token" class="ajuda">Use o token fornecido pelo professor. Ele fica disponível nesta página até recarregar ou desconectar.</p>
+        <p id="erro-conexao" class="erro-inline" role="alert" hidden></p>
+      </div>
+      <footer class="dialog-acoes">
+        <button id="desconectar" type="button" class="botao texto afastado" data-ocupado hidden>Desconectar</button>
+        <button type="button" class="botao secundario" data-fechar data-ocupado>Cancelar</button>
+        <button id="enviar-token" type="submit" class="botao primario" data-ocupado>Conectar</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="dialog-detalhe" aria-labelledby="titulo-detalhe">
+    <header class="dialog-topo">
+      <div><p class="dialog-sobretitulo" id="numero-detalhe">Detalhes</p><h2 id="titulo-detalhe">Chamado</h2></div>
+      <button type="button" class="botao-icone" aria-label="Fechar" data-fechar data-ocupado autofocus>
+        <svg class="icone" aria-hidden="true"><use href="#i-fechar"/></svg>
+      </button>
+    </header>
+    <div class="dialog-corpo">
+      <p id="carregando-detalhe" class="carregando-detalhe" role="status">Carregando chamado…</p>
+      <p id="erro-detalhe" class="erro-inline" role="alert" hidden></p>
+      <div id="dados-detalhe" hidden>
+        <div class="etiquetas-detalhe">
+          <span id="status-detalhe" class="etiqueta"></span>
+          <span id="prioridade-detalhe" class="etiqueta"></span>
+        </div>
+        <h3>Descrição</h3>
+        <p id="descricao-detalhe" class="descricao-detalhe"></p>
+        <dl class="metadados">
+          <div><dt>Categoria</dt><dd id="categoria-detalhe"></dd></div>
+          <div><dt>Criado em</dt><dd id="criado-detalhe"></dd></div>
+          <div><dt>Atualizado em</dt><dd id="atualizado-detalhe"></dd></div>
+        </dl>
+      </div>
+    </div>
+    <footer class="dialog-acoes">
+      <button type="button" class="botao secundario" data-fechar data-ocupado>Fechar</button>
+      <button id="editar-detalhe" type="button" class="botao primario" data-ocupado hidden>Editar chamado</button>
+    </footer>
+  </dialog>
+
+  <dialog id="dialog-formulario" aria-labelledby="titulo-formulario">
+    <form id="form-chamado">
+      <header class="dialog-topo">
+        <div><p class="dialog-sobretitulo">Solicitação de suporte</p><h2 id="titulo-formulario">Novo chamado</h2></div>
+        <button type="button" class="botao-icone" aria-label="Fechar" data-fechar data-ocupado>
+          <svg class="icone" aria-hidden="true"><use href="#i-fechar"/></svg>
+        </button>
+      </header>
+      <div class="dialog-corpo">
+        <fieldset class="campos-formulario" data-ocupado>
+          <label class="campo">
+            <span>Título</span>
+            <input id="campo-titulo" name="titulo" required placeholder="Ex. Computador do laboratório não liga" autofocus>
+          </label>
+          <label class="campo">
+            <span id="rotulo-descricao">Descrição <small>Opcional</small></span>
+            <textarea id="campo-descricao" name="descricao" rows="4" placeholder="Descreva o que aconteceu." aria-labelledby="rotulo-descricao" aria-describedby="tamanho-descricao"></textarea>
+            <span id="tamanho-descricao" class="contador">0 / 2.000</span>
+          </label>
+          <div class="campos-duplos">
+            <label class="campo">
+              <span>Categoria</span>
+              <span class="controle com-seta">
+                <select id="campo-categoria" name="categoria" required>
+                  <option value="">Selecione uma categoria</option>
+                  <option value="hardware">Hardware</option>
+                  <option value="software">Software</option>
+                  <option value="rede">Rede</option>
+                  <option value="outro">Outro</option>
+                </select>
+                <svg class="icone" aria-hidden="true"><use href="#i-seta"/></svg>
+              </span>
+            </label>
+            <label class="campo">
+              <span>Prioridade</span>
+              <span class="controle com-seta">
+                <select id="campo-prioridade" name="prioridade" required>
+                  <option value="">Selecione uma prioridade</option>
+                  <option value="baixa">Baixa</option>
+                  <option value="media">Média</option>
+                  <option value="alta">Alta</option>
+                </select>
+                <svg class="icone" aria-hidden="true"><use href="#i-seta"/></svg>
+              </span>
+            </label>
+          </div>
+          <label id="rotulo-campo-status" class="campo" hidden>
+            <span>Status</span>
+            <span class="controle com-seta">
+              <select id="campo-status" name="status" required disabled>
+                <option value="aberto">Aberto</option>
+                <option value="em_andamento">Em andamento</option>
+                <option value="concluido">Concluído</option>
+              </select>
+              <svg class="icone" aria-hidden="true"><use href="#i-seta"/></svg>
+            </span>
+          </label>
+        </fieldset>
+        <p id="erro-formulario" class="erro-inline" role="alert" hidden></p>
+      </div>
+      <footer class="dialog-acoes">
+        <button type="button" class="botao secundario" data-fechar data-ocupado>Cancelar</button>
+        <button id="salvar-chamado" type="submit" class="botao primario" data-ocupado>Criar chamado</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="dialog-exclusao" aria-labelledby="titulo-exclusao" aria-describedby="descricao-exclusao">
+    <header class="dialog-topo">
+      <div><p class="dialog-sobretitulo">Confirmação</p><h2 id="titulo-exclusao">Excluir chamado?</h2></div>
+      <button type="button" class="botao-icone" aria-label="Fechar" data-fechar data-ocupado>
+        <svg class="icone" aria-hidden="true"><use href="#i-fechar"/></svg>
+      </button>
+    </header>
+    <div class="dialog-corpo">
+      <p id="descricao-exclusao">O chamado <strong id="nome-exclusao"></strong> será removido permanentemente.</p>
+      <p id="erro-exclusao" class="erro-inline" role="alert" hidden></p>
+    </div>
+    <footer class="dialog-acoes">
+      <button type="button" class="botao secundario" data-fechar data-ocupado autofocus>Cancelar</button>
+      <button id="confirmar-exclusao" type="button" class="botao perigoso" data-ocupado>Excluir chamado</button>
+    </footer>
+  </dialog>
+
+  <div id="notificacao" class="notificacao" role="status" aria-live="polite"></div>
+  <noscript>Ative o JavaScript para usar a Central de Chamados.</noscript>
+</body>
+</html>
