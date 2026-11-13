@@ -1,473 +1,834 @@
-"use strict";
+// Central de Chamados - Fatec Lins
+// Toda a aplicação (interface + comunicação com a API) fica neste arquivo.
 
-const porId = (id) => document.getElementById(id);
+const API_URL = "https://felipemaciel.com.br/_fatec/api/central-chamados/chamados";
+const TOKEN_PADRAO = "fd17edc7c76c9779bfa4f584ca1d19068c02059eec22bd0290423608ee4d5f7a";
 
-const CATEGORIAS = { hardware: "Hardware", software: "Software", rede: "Rede", outro: "Outro" };
-const PRIORIDADES = { baixa: "Baixa", media: "Média", alta: "Alta" };
-const STATUS = { aberto: "Aberto", em_andamento: "Em andamento", concluido: "Concluído" };
+let token = "";
+let modoAtual = "offline"; // offline, api ou demo
+let chamadosArr = [];
+let chamadoEmEdicao = null;
+let chamadoEmDetalhe = null;
+let chamadoParaExcluir = null;
+let temporizadorNotificacao = null;
 
-const estado = {
-  cliente: null,
-  chamados: [],
-  ocupado: false,
-  carregandoLista: false,
-  erroLista: "",
-  editandoId: null,
-  detalhe: null,
-  chamadoParaExcluir: null,
+const rotulos = {
+  categoria: {
+    hardware: "Hardware",
+    software: "Software",
+    rede: "Rede",
+    outro: "Outro"
+  },
+  prioridade: {
+    baixa: "Baixa",
+    media: "Média",
+    alta: "Alta"
+  },
+  status: {
+    aberto: "Aberto",
+    em_andamento: "Em andamento",
+    concluido: "Concluído"
+  }
 };
 
-const filtros = {
-  titulo: porId("buscar"),
-  status: porId("filtrar-status"),
-  prioridade: porId("filtrar-prioridade"),
-};
-const campos = {
-  titulo: porId("campo-titulo"),
-  descricao: porId("campo-descricao"),
-  categoria: porId("campo-categoria"),
-  prioridade: porId("campo-prioridade"),
-  status: porId("campo-status"),
-};
-const dialogConexao = porId("dialog-conexao");
-const dialogDetalhe = porId("dialog-detalhe");
-const dialogFormulario = porId("dialog-formulario");
-const dialogExclusao = porId("dialog-exclusao");
-const dataCurta = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" });
-const dataCompleta = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" });
-const numero = new Intl.NumberFormat("pt-BR");
-let temporizadorNotificacao;
+const dadosDemonstracao = [
+  {
+    id: "demo-1",
+    titulo: "Computador do laboratório não liga",
+    descricao: "Ao pressionar o botão de energia, o computador não inicia.",
+    categoria: "hardware",
+    prioridade: "alta",
+    status: "aberto",
+    criado_em: "2026-11-10 08:30:00",
+    atualizado_em: "2026-11-10 08:30:00"
+  },
+  {
+    id: "demo-2",
+    titulo: "Instalação do pacote de escritório",
+    descricao: "Preciso do pacote de escritório instalado para realizar as atividades.",
+    categoria: "software",
+    prioridade: "media",
+    status: "em_andamento",
+    criado_em: "2026-11-08 14:15:00",
+    atualizado_em: "2026-11-09 09:20:00"
+  },
+  {
+    id: "demo-3",
+    titulo: "Conexão de rede instável",
+    descricao: "A conexão cai algumas vezes durante as aulas.",
+    categoria: "rede",
+    prioridade: "baixa",
+    status: "concluido",
+    criado_em: "2026-11-05 19:00:00",
+    atualizado_em: "2026-11-06 10:00:00"
+  }
+];
 
-function atualizarControles() {
-  const conectado = Boolean(estado.cliente);
-  document.querySelectorAll("[data-ocupado]").forEach((controle) => {
-    controle.disabled = estado.ocupado;
-  });
-  Object.values(filtros).forEach((filtro) => { filtro.disabled = !conectado; });
-  porId("atualizar").disabled = estado.ocupado || !conectado;
-}
+// Elementos da página
+const indicadorConexao = document.querySelector("#indicador-conexao");
+const botaoConectar = document.querySelector("#conectar");
+const botaoNovoChamado = document.querySelector("#novo-chamado");
+const botaoAtualizar = document.querySelector("#atualizar");
+const botaoDemonstrar = document.querySelector("#demonstrar");
+const botaoVazioConectar = document.querySelector("#vazio-conectar");
+const botaoVazioNovo = document.querySelector("#vazio-novo");
+const botaoTentarNovamente = document.querySelector("#tentar-novamente");
+const botaoLimparFiltros = document.querySelector("#limpar-filtros");
+const botaoLimparFiltrosRodape = document.querySelector("#limpar-filtros-rodape");
 
-async function executar(acao, emCasoDeErro, progresso) {
-  if (estado.ocupado) return;
+const dialogConexao = document.querySelector("#dialog-conexao");
+const formConexao = document.querySelector("#form-conexao");
+const campoToken = document.querySelector("#token");
+const erroConexao = document.querySelector("#erro-conexao");
+const botaoDesconectar = document.querySelector("#desconectar");
+const botaoEnviarToken = document.querySelector("#enviar-token");
 
-  const foco = document.activeElement;
-  const textoOriginal = progresso?.botao.textContent;
-  if (progresso) progresso.botao.textContent = progresso.rotulo;
-  estado.ocupado = true;
-  atualizarControles();
+const campoBuscar = document.querySelector("#buscar");
+const filtroStatus = document.querySelector("#filtrar-status");
+const filtroPrioridade = document.querySelector("#filtrar-prioridade");
+const listaChamados = document.querySelector("#lista-chamados");
+const modeloLinha = document.querySelector("#modelo-linha");
+const envoltoriaTabela = document.querySelector("#envoltoria-tabela");
+const listaVazia = document.querySelector("#lista-vazia");
+const carregandoLista = document.querySelector("#carregando-lista");
+const resultadoLista = document.querySelector("#resultado-lista");
+const erroLista = document.querySelector("#erro-lista");
+const rodapeLista = document.querySelector("#rodape-lista");
+const contagem = document.querySelector("#contagem");
+const vazioTitulo = document.querySelector("#vazio-titulo");
+const vazioDescricao = document.querySelector("#vazio-descricao");
+
+const dialogDetalhe = document.querySelector("#dialog-detalhe");
+const carregandoDetalhe = document.querySelector("#carregando-detalhe");
+const dadosDetalhe = document.querySelector("#dados-detalhe");
+const erroDetalhe = document.querySelector("#erro-detalhe");
+const numeroDetalhe = document.querySelector("#numero-detalhe");
+const tituloDetalhe = document.querySelector("#titulo-detalhe");
+const statusDetalhe = document.querySelector("#status-detalhe");
+const prioridadeDetalhe = document.querySelector("#prioridade-detalhe");
+const descricaoDetalhe = document.querySelector("#descricao-detalhe");
+const categoriaDetalhe = document.querySelector("#categoria-detalhe");
+const criadoDetalhe = document.querySelector("#criado-detalhe");
+const atualizadoDetalhe = document.querySelector("#atualizado-detalhe");
+const botaoEditarDetalhe = document.querySelector("#editar-detalhe");
+
+const dialogFormulario = document.querySelector("#dialog-formulario");
+const formChamado = document.querySelector("#form-chamado");
+const tituloFormulario = document.querySelector("#titulo-formulario");
+const campoTitulo = document.querySelector("#campo-titulo");
+const campoDescricao = document.querySelector("#campo-descricao");
+const campoCategoria = document.querySelector("#campo-categoria");
+const campoPrioridade = document.querySelector("#campo-prioridade");
+const campoStatus = document.querySelector("#campo-status");
+const rotuloCampoStatus = document.querySelector("#rotulo-campo-status");
+const tamanhoDescricao = document.querySelector("#tamanho-descricao");
+const erroFormulario = document.querySelector("#erro-formulario");
+const botaoSalvarChamado = document.querySelector("#salvar-chamado");
+
+const dialogExclusao = document.querySelector("#dialog-exclusao");
+const nomeExclusao = document.querySelector("#nome-exclusao");
+const erroExclusao = document.querySelector("#erro-exclusao");
+const botaoConfirmarExclusao = document.querySelector("#confirmar-exclusao");
+const notificacao = document.querySelector("#notificacao");
+
+// Faz a requisição e interpreta as respostas da API.
+async function requisicaoAPI(metodo, id = null, dados = null) {
+  let url = id === null ? API_URL : `${API_URL}/${encodeURIComponent(id)}`;
+  let cabecalhos = {
+    Authorization: `Bearer ${token}`
+  };
+
+  let configuracao = {
+    method: metodo,
+    headers: cabecalhos
+  };
+
+  if (dados !== null) {
+    cabecalhos["Content-Type"] = "application/json";
+    configuracao.body = JSON.stringify(dados);
+  }
+
+  let resposta;
 
   try {
-    await acao();
+    resposta = await fetch(url, configuracao);
   } catch (erro) {
-    emCasoDeErro(erro);
-  } finally {
-    estado.ocupado = false;
-    if (progresso) progresso.botao.textContent = textoOriginal;
-    atualizarControles();
-    if (document.activeElement === document.body && foco.isConnected && !foco.closest("dialog:not([open])")) {
-      foco.focus();
+    let erroRede = new Error("Não foi possível acessar a API. Verifique sua conexão com a internet e tente novamente.");
+    erroRede.status = 0;
+    throw erroRede;
+  }
+
+  // A resposta 204 não possui corpo e, portanto, não deve ser convertida em JSON.
+  let corpo = null;
+  if (resposta.status !== 204) {
+    let textoResposta = await resposta.text();
+
+    if (textoResposta.trim() !== "") {
+      try {
+        corpo = JSON.parse(textoResposta);
+      } catch (erro) {
+        corpo = null;
+      }
     }
   }
+
+  if (!resposta.ok) {
+    let mensagem = corpo && corpo.erro && corpo.erro.mensagem
+      ? corpo.erro.mensagem
+      : `A API retornou o erro HTTP ${resposta.status}.`;
+
+    if (corpo && corpo.erro && corpo.erro.campos) {
+      let errosCampos = Object.entries(corpo.erro.campos)
+        .map(function ([campo, texto]) {
+          return `${campo}: ${texto}`;
+        })
+        .join(" ");
+
+      if (errosCampos) {
+        mensagem += ` ${errosCampos}`;
+      }
+    }
+
+    let erroAPI = new Error(mensagem);
+    erroAPI.status = resposta.status;
+    erroAPI.dados = corpo;
+    throw erroAPI;
+  }
+
+  return corpo;
 }
 
-function mensagemDeErro(erro) {
-  if (!(erro instanceof ErroApi)) return erro.message;
-  const detalhes = Object.values(erro.campos).filter((valor) => typeof valor === "string");
-  return ["HTTP " + erro.status + " · " + erro.message, ...detalhes].join(" ");
+function abrirDialog(dialog) {
+  if (dialog && !dialog.open) {
+    dialog.showModal();
+  }
 }
 
-function mostrarErro(id, mensagem = "") {
-  const caixa = porId(id);
-  caixa.textContent = mensagem;
-  caixa.hidden = !mensagem;
+function fecharDialog(dialog) {
+  if (dialog && dialog.open) {
+    dialog.close();
+  }
 }
 
-function notificar(mensagem) {
-  const caixa = porId("notificacao");
+function mostrarNotificacao(mensagem) {
+  notificacao.textContent = mensagem;
   clearTimeout(temporizadorNotificacao);
-  caixa.textContent = mensagem;
-  temporizadorNotificacao = setTimeout(() => { caixa.textContent = ""; }, 4800);
+  temporizadorNotificacao = setTimeout(function () {
+    notificacao.textContent = "";
+  }, 3500);
 }
 
-function textoParaBusca(texto) {
-  return texto.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().trim();
+function mostrarErro(elemento, mensagem) {
+  elemento.textContent = mensagem;
+  elemento.hidden = false;
 }
 
-function numeroChamado(id) {
-  return "#" + String(id).padStart(4, "0");
+function limparErro(elemento) {
+  elemento.textContent = "";
+  elemento.hidden = true;
 }
 
-function formatarData(valor, formatador) {
-  // A API informa data e hora sem fuso, no formato AAAA-MM-DD HH:MM:SS.
-  const data = new Date(String(valor).replace(" ", "T"));
-  return Number.isNaN(data.getTime()) ? "—" : formatador.format(data);
-}
+function definirModo(modo) {
+  modoAtual = modo;
 
-function preencherEtiqueta(etiqueta, valor, rotulos) {
-  etiqueta.dataset.valor = valor;
-  etiqueta.textContent = rotulos[valor] ?? "—";
-}
-
-function montarLinha(chamado) {
-  const linha = porId("modelo-linha").content.firstElementChild.cloneNode(true);
-  linha.dataset.id = chamado.id;
-  linha.querySelector(".link-chamado").textContent = chamado.titulo;
-  linha.querySelector(".numero-chamado").textContent = numeroChamado(chamado.id);
-  linha.querySelector(".celula-categoria").textContent = CATEGORIAS[chamado.categoria] ?? "—";
-  preencherEtiqueta(linha.querySelector(".celula-prioridade .etiqueta"), chamado.prioridade, PRIORIDADES);
-  preencherEtiqueta(linha.querySelector(".celula-status .etiqueta"), chamado.status, STATUS);
-  const data = linha.querySelector("time");
-  data.textContent = formatarData(chamado.criado_em, dataCurta);
-  data.dateTime = String(chamado.criado_em).replace(" ", "T");
-  linha.querySelector('[data-acao="editar"]').setAttribute("aria-label", "Editar chamado " + numeroChamado(chamado.id));
-  linha.querySelector('[data-acao="excluir"]').setAttribute("aria-label", "Excluir chamado " + numeroChamado(chamado.id));
-  return linha;
-}
-
-function renderizarEstadoVazio(filtrosAtivos) {
-  let modo = "sem-chamados";
-  if (!estado.cliente) modo = "offline";
-  else if (estado.erroLista && !estado.chamados.length) modo = "erro";
-  else if (filtrosAtivos) modo = "filtrado";
-
-  const mensagens = {
-    offline: ["Conecte-se para ver seus chamados", "Use o token da atividade ou explore a interface com dados de exemplo."],
-    erro: ["Não foi possível carregar os chamados", "Tente carregar a lista novamente."],
-    filtrado: ["Nenhum chamado encontrado", "Altere a pesquisa ou limpe os filtros para ver mais resultados."],
-    "sem-chamados": ["Nenhum chamado cadastrado", "Crie uma solicitação para começar a acompanhar seu atendimento."],
-  };
-  const [titulo, descricao] = mensagens[modo];
-  porId("vazio-titulo").textContent = titulo;
-  porId("vazio-descricao").textContent = descricao;
-  porId("vazio-conectar").hidden = modo !== "offline";
-  porId("demonstrar").hidden = modo !== "offline";
-  porId("vazio-novo").hidden = modo !== "sem-chamados";
-  porId("limpar-filtros").hidden = modo !== "filtrado";
-  porId("tentar-novamente").hidden = modo !== "erro";
-}
-
-function renderizarLista() {
-  const titulo = textoParaBusca(filtros.titulo.value);
-  const status = filtros.status.value;
-  const prioridade = filtros.prioridade.value;
-  const filtrosAtivos = Boolean(titulo || status || prioridade);
-  const visiveis = estado.chamados.filter((chamado) =>
-    (!titulo || textoParaBusca(chamado.titulo).includes(titulo)) &&
-    (!status || chamado.status === status) &&
-    (!prioridade || chamado.prioridade === prioridade)
-  );
-
-  const mostrarTabela = !estado.carregandoLista && visiveis.length > 0;
-  porId("resultado-lista").setAttribute("aria-busy", String(estado.carregandoLista));
-  porId("carregando-lista").hidden = !estado.carregandoLista;
-  porId("envoltoria-tabela").hidden = !mostrarTabela;
-  porId("rodape-lista").hidden = !mostrarTabela;
-  porId("lista-vazia").hidden = estado.carregandoLista || mostrarTabela;
-  mostrarErro("erro-lista", estado.erroLista);
-
-  const linhas = document.createDocumentFragment();
-  if (mostrarTabela) {
-    visiveis.forEach((chamado) => linhas.append(montarLinha(chamado)));
-    const contagem = numero.format(visiveis.length);
-    porId("contagem").textContent = filtrosAtivos
-      ? contagem + " de " + numero.format(estado.chamados.length) + " chamados"
-      : contagem + (visiveis.length === 1 ? " chamado" : " chamados");
+  if (modo === "api") {
+    indicadorConexao.textContent = "Conectado à API";
+    indicadorConexao.dataset.modo = "api";
+    botaoDesconectar.hidden = false;
+    botaoConectar.querySelector("span").textContent = "Conexão";
+  } else if (modo === "demo") {
+    indicadorConexao.textContent = "Modo demonstração";
+    indicadorConexao.dataset.modo = "demo";
+    botaoDesconectar.hidden = true;
+    botaoConectar.querySelector("span").textContent = "Conectar API";
+  } else {
+    indicadorConexao.textContent = "Sem conexão";
+    indicadorConexao.dataset.modo = "offline";
+    botaoDesconectar.hidden = true;
+    botaoConectar.querySelector("span").textContent = "Conectar API";
   }
-  porId("lista-chamados").replaceChildren(linhas);
-  porId("limpar-filtros-rodape").hidden = !filtrosAtivos;
-  renderizarEstadoVazio(filtrosAtivos);
-  atualizarControles();
+
+  let conectado = modo !== "offline";
+  campoBuscar.disabled = !conectado;
+  filtroStatus.disabled = !conectado;
+  filtroPrioridade.disabled = !conectado;
+  botaoAtualizar.disabled = !conectado;
 }
 
-function renderizar() {
-  const modo = estado.cliente?.modo ?? "offline";
-  const indicador = porId("indicador-conexao");
-  indicador.dataset.modo = modo;
-  indicador.textContent = { offline: "Sem conexão", api: "API conectada", demo: "Demonstração" }[modo];
-  porId("conectar").querySelector("span").textContent = modo === "api" ? "Conexão" : "Conectar API";
-
-  const totais = { aberto: 0, em_andamento: 0, concluido: 0 };
-  for (const chamado of estado.chamados) {
-    if (Object.hasOwn(totais, chamado.status)) totais[chamado.status] += 1;
+function formatarData(data) {
+  if (!data) {
+    return "Não informado";
   }
-  porId("total").textContent = estado.cliente ? numero.format(estado.chamados.length) : "—";
-  for (const [status, total] of Object.entries(totais)) {
-    porId("total-" + status.replace("_", "-")).textContent = estado.cliente ? numero.format(total) : "—";
+
+  let dataConvertida = new Date(String(data).replace(" ", "T"));
+  if (Number.isNaN(dataConvertida.getTime())) {
+    return data;
   }
-  renderizarLista();
+
+  return dataConvertida.toLocaleString("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short"
+  });
 }
 
-function zerarFiltros() {
-  Object.values(filtros).forEach((filtro) => { filtro.value = ""; });
+function definirEtiqueta(elemento, valor, tipo) {
+  elemento.textContent = rotulos[tipo][valor] || valor || "Não informado";
+  elemento.dataset.valor = valor || "";
 }
 
-function limparFiltros() {
-  zerarFiltros();
-  renderizarLista();
-  filtros.titulo.focus();
+function atualizarResumo() {
+  document.querySelector("#total").textContent = chamadosArr.length;
+  document.querySelector("#total-aberto").textContent = chamadosArr.filter(function (chamado) {
+    return chamado.status === "aberto";
+  }).length;
+  document.querySelector("#total-em-andamento").textContent = chamadosArr.filter(function (chamado) {
+    return chamado.status === "em_andamento";
+  }).length;
+  document.querySelector("#total-concluido").textContent = chamadosArr.filter(function (chamado) {
+    return chamado.status === "concluido";
+  }).length;
 }
 
-async function iniciarSessao(cliente) {
-  // Só substitui os dados visíveis depois que a nova sessão for validada.
-  const chamados = await cliente.listar();
-  estado.cliente = cliente;
-  estado.chamados = chamados;
-  estado.erroLista = "";
-  zerarFiltros();
-  renderizar();
+function obterChamadosFiltrados() {
+  let textoDigitado = campoBuscar.value.trim().toLowerCase();
+  let statusSelecionado = filtroStatus.value;
+  let prioridadeSelecionada = filtroPrioridade.value;
+
+  return chamadosArr.filter(function (chamado) {
+    let correspondeTitulo = chamado.titulo.toLowerCase().includes(textoDigitado);
+    let correspondeStatus = statusSelecionado === "" || chamado.status === statusSelecionado;
+    let correspondePrioridade = prioridadeSelecionada === "" || chamado.prioridade === prioridadeSelecionada;
+
+    return correspondeTitulo && correspondeStatus && correspondePrioridade;
+  });
 }
 
-function abrirConexao() {
-  porId("form-conexao").reset();
-  porId("token").removeAttribute("aria-invalid");
-  mostrarErro("erro-conexao");
-  porId("desconectar").hidden = !estado.cliente;
-  dialogConexao.showModal();
+function existemFiltrosAtivos() {
+  return campoBuscar.value.trim() !== "" || filtroStatus.value !== "" || filtroPrioridade.value !== "";
 }
 
-porId("form-conexao").addEventListener("submit", (evento) => {
-  evento.preventDefault();
-  const campo = porId("token");
-  const token = campo.value.trim();
+function renderizarChamados() {
+  listaChamados.replaceChildren();
+  atualizarResumo();
 
-  if (!/^[a-f0-9]{64}$/i.test(token)) {
-    campo.setAttribute("aria-invalid", "true");
-    mostrarErro("erro-conexao", "O token deve ter 64 caracteres hexadecimais.");
-    campo.focus();
+  let chamadosFiltrados = obterChamadosFiltrados();
+  carregandoLista.hidden = true;
+  resultadoLista.setAttribute("aria-busy", "false");
+  envoltoriaTabela.hidden = true;
+  rodapeLista.hidden = true;
+  listaVazia.hidden = false;
+
+  if (modoAtual === "offline") {
+    vazioTitulo.textContent = "Conecte-se para ver seus chamados";
+    vazioDescricao.textContent = "Use o token da atividade ou explore a interface com dados de exemplo.";
+    botaoVazioConectar.hidden = false;
+    botaoDemonstrar.hidden = false;
+    botaoVazioNovo.hidden = true;
+    botaoLimparFiltros.hidden = true;
+    botaoTentarNovamente.hidden = true;
     return;
   }
 
-  mostrarErro("erro-conexao");
-  executar(async () => {
-    await iniciarSessao(conectarClienteApi(token));
-    dialogConexao.close();
-    notificar("API conectada. Seus chamados foram carregados.");
-  }, (erro) => {
-    if (erro.status === 401) campo.setAttribute("aria-invalid", "true");
-    mostrarErro("erro-conexao", mensagemDeErro(erro));
-  }, { botao: porId("enviar-token"), rotulo: "Conectando…" });
-});
+  botaoVazioConectar.hidden = true;
+  botaoDemonstrar.hidden = true;
+  botaoTentarNovamente.hidden = true;
 
-porId("token").addEventListener("input", () => {
-  porId("token").removeAttribute("aria-invalid");
-  mostrarErro("erro-conexao");
-});
-dialogConexao.addEventListener("close", () => { porId("form-conexao").reset(); });
-
-porId("desconectar").addEventListener("click", () => {
-  estado.cliente = null;
-  estado.chamados = [];
-  estado.detalhe = null;
-  estado.chamadoParaExcluir = null;
-  estado.erroLista = "";
-  zerarFiltros();
-  dialogConexao.close();
-  renderizar();
-  notificar("Sessão desconectada.");
-});
-
-porId("demonstrar").addEventListener("click", () => {
-  executar(async () => {
-    await iniciarSessao(criarClienteDemonstracao());
-    notificar("Demonstração iniciada. As alterações valem para esta sessão.");
-  }, (erro) => {
-    estado.erroLista = mensagemDeErro(erro);
-    renderizarLista();
-  });
-});
-
-async function recarregarLista() {
-  if (!estado.cliente) return;
-
-  await executar(async () => {
-    estado.carregandoLista = true;
-    estado.erroLista = "";
-    renderizarLista();
-
-    try {
-      estado.chamados = await estado.cliente.listar();
-      notificar("Lista atualizada.");
-    } finally {
-      estado.carregandoLista = false;
-    }
-  }, (erro) => { estado.erroLista = mensagemDeErro(erro); });
-
-  renderizar();
-}
-
-function mostrarDetalhe(chamado) {
-  porId("titulo-detalhe").textContent = chamado.titulo;
-  preencherEtiqueta(porId("status-detalhe"), chamado.status, STATUS);
-  preencherEtiqueta(porId("prioridade-detalhe"), chamado.prioridade, PRIORIDADES);
-  porId("descricao-detalhe").textContent = chamado.descricao || "Sem descrição.";
-  porId("categoria-detalhe").textContent = CATEGORIAS[chamado.categoria] ?? "—";
-  porId("criado-detalhe").textContent = formatarData(chamado.criado_em, dataCompleta);
-  porId("atualizado-detalhe").textContent = formatarData(chamado.atualizado_em, dataCompleta);
-  porId("dados-detalhe").hidden = false;
-  porId("editar-detalhe").hidden = false;
-}
-
-async function carregarDetalhe(chamado, editarDepois = false) {
-  estado.detalhe = null;
-  porId("numero-detalhe").textContent = "Chamado " + numeroChamado(chamado.id);
-  porId("titulo-detalhe").textContent = chamado.titulo;
-  porId("carregando-detalhe").hidden = false;
-  porId("dados-detalhe").hidden = true;
-  porId("editar-detalhe").hidden = true;
-  mostrarErro("erro-detalhe");
-  dialogDetalhe.showModal();
-
-  await executar(async () => {
-    estado.detalhe = await estado.cliente.detalhar(chamado.id);
-    if (editarDepois) {
-      dialogDetalhe.close();
-      abrirFormulario(estado.detalhe);
+  if (chamadosFiltrados.length === 0) {
+    if (chamadosArr.length === 0) {
+      vazioTitulo.textContent = "Você ainda não possui chamados";
+      vazioDescricao.textContent = "Cadastre seu primeiro chamado para acompanhar a solicitação por aqui.";
+      botaoVazioNovo.hidden = false;
+      botaoLimparFiltros.hidden = true;
     } else {
-      mostrarDetalhe(estado.detalhe);
+      vazioTitulo.textContent = "Nenhum chamado encontrado";
+      vazioDescricao.textContent = "Não encontramos chamados com os filtros informados.";
+      botaoVazioNovo.hidden = true;
+      botaoLimparFiltros.hidden = false;
     }
-  }, (erro) => { mostrarErro("erro-detalhe", mensagemDeErro(erro)); });
+    return;
+  }
 
-  porId("carregando-detalhe").hidden = true;
-  if (editarDepois && dialogFormulario.open) campos.titulo.focus();
-}
+  listaVazia.hidden = true;
+  envoltoriaTabela.hidden = false;
+  rodapeLista.hidden = false;
+  botaoLimparFiltrosRodape.hidden = !existemFiltrosAtivos();
 
-function atualizarContador() {
-  porId("tamanho-descricao").textContent = numero.format([...campos.descricao.value].length) + " / 2.000";
-}
+  chamadosFiltrados.forEach(function (chamado) {
+    let linhaModelo = modeloLinha.content.cloneNode(true);
+    let linha = linhaModelo.querySelector("tr");
+    let linkChamado = linhaModelo.querySelector('[data-acao="detalhar"]');
+    let numeroChamado = linhaModelo.querySelector(".numero-chamado");
+    let categoria = linhaModelo.querySelector(".celula-categoria");
+    let prioridade = linhaModelo.querySelector(".celula-prioridade .etiqueta");
+    let status = linhaModelo.querySelector(".celula-status .etiqueta");
+    let dataCriacao = linhaModelo.querySelector(".celula-data time");
+    let botoesAcao = linhaModelo.querySelectorAll("[data-acao]");
 
-function abrirFormulario(chamado) {
-  const editando = Boolean(chamado);
-  estado.editandoId = chamado?.id ?? null;
-  porId("form-chamado").reset();
-  Object.entries(campos).forEach(([nome, campo]) => {
-    if (editando) campo.value = chamado[nome] ?? "";
-    campo.removeAttribute("aria-invalid");
+    linkChamado.textContent = chamado.titulo;
+    numeroChamado.textContent = `Chamado #${chamado.id}`;
+    categoria.textContent = rotulos.categoria[chamado.categoria] || chamado.categoria;
+    definirEtiqueta(prioridade, chamado.prioridade, "prioridade");
+    definirEtiqueta(status, chamado.status, "status");
+    dataCriacao.textContent = formatarData(chamado.criado_em);
+
+    if (chamado.criado_em) {
+      dataCriacao.dateTime = String(chamado.criado_em).replace(" ", "T");
+    }
+
+    botoesAcao.forEach(function (botao) {
+      botao.dataset.id = chamado.id;
+    });
+
+    linha.dataset.id = chamado.id;
+    listaChamados.appendChild(linhaModelo);
   });
-  porId("rotulo-campo-status").hidden = !editando;
-  campos.status.disabled = !editando;
-  porId("titulo-formulario").textContent = editando ? "Editar chamado" : "Novo chamado";
-  porId("salvar-chamado").textContent = editando ? "Salvar alterações" : "Criar chamado";
-  mostrarErro("erro-formulario");
-  atualizarContador();
-  dialogFormulario.showModal();
+
+  contagem.textContent = existemFiltrosAtivos()
+    ? `${chamadosFiltrados.length} de ${chamadosArr.length} chamados`
+    : `${chamadosArr.length} ${chamadosArr.length === 1 ? "chamado" : "chamados"}`;
 }
 
-function abrirNovoChamado() {
-  if (estado.cliente) abrirFormulario();
-  else abrirConexao();
+function mostrarCarregamento() {
+  limparErro(erroLista);
+  carregandoLista.hidden = false;
+  listaVazia.hidden = true;
+  envoltoriaTabela.hidden = true;
+  rodapeLista.hidden = true;
+  resultadoLista.setAttribute("aria-busy", "true");
 }
 
-function validarFormulario() {
-  const tamanhoTitulo = [...campos.titulo.value.trim()].length;
-  if (tamanhoTitulo === 0 || tamanhoTitulo > 150) {
-    campos.titulo.setAttribute("aria-invalid", "true");
-    mostrarErro("erro-formulario", "Informe um título com 1 a 150 caracteres.");
-    campos.titulo.focus();
-    return false;
+function mostrarFalhaNaLista(mensagem) {
+  carregandoLista.hidden = true;
+  listaVazia.hidden = false;
+  envoltoriaTabela.hidden = true;
+  rodapeLista.hidden = true;
+  resultadoLista.setAttribute("aria-busy", "false");
+  vazioTitulo.textContent = "Não foi possível carregar os chamados";
+  vazioDescricao.textContent = "Confira a conexão e tente novamente.";
+  botaoVazioConectar.hidden = true;
+  botaoDemonstrar.hidden = true;
+  botaoVazioNovo.hidden = true;
+  botaoLimparFiltros.hidden = true;
+  botaoTentarNovamente.hidden = false;
+  mostrarErro(erroLista, mensagem);
+}
+
+async function atualizarChamados() {
+  if (modoAtual === "offline") {
+    renderizarChamados();
+    return;
   }
-  if ([...campos.descricao.value].length > 2000) {
-    campos.descricao.setAttribute("aria-invalid", "true");
-    mostrarErro("erro-formulario", "A descrição deve ter até 2.000 caracteres.");
-    campos.descricao.focus();
-    return false;
+
+  if (modoAtual === "demo") {
+    renderizarChamados();
+    return;
   }
-  return true;
+
+  mostrarCarregamento();
+
+  try {
+    let resposta = await requisicaoAPI("GET");
+    chamadosArr = resposta && Array.isArray(resposta.dados) ? resposta.dados : [];
+    renderizarChamados();
+  } catch (erro) {
+    mostrarFalhaNaLista(erro.message);
+  }
 }
 
-porId("form-chamado").addEventListener("submit", async (evento) => {
+function abrirConexao() {
+  limparErro(erroConexao);
+  if (!campoToken.value && TOKEN_PADRAO) {
+    campoToken.value = TOKEN_PADRAO;
+  }
+  botaoDesconectar.hidden = modoAtual !== "api";
+  abrirDialog(dialogConexao);
+}
+
+async function conectarAPI(evento) {
   evento.preventDefault();
-  if (!validarFormulario()) return;
+  limparErro(erroConexao);
 
-  const id = estado.editandoId;
-  const editando = id !== null;
-  const dados = {
-    titulo: campos.titulo.value.trim(),
-    descricao: campos.descricao.value,
-    categoria: campos.categoria.value,
-    prioridade: campos.prioridade.value,
-  };
-  if (editando) dados.status = campos.status.value;
-  mostrarErro("erro-formulario");
+  let tokenDigitado = campoToken.value.trim();
+  if (!/^[a-fA-F0-9]{64}$/.test(tokenDigitado)) {
+    mostrarErro(erroConexao, "O token deve conter exatamente 64 caracteres hexadecimais.");
+    campoToken.focus();
+    return;
+  }
 
-  await executar(async () => {
-    if (editando) {
-      const atualizado = await estado.cliente.editar(id, dados);
-      estado.chamados = estado.chamados.map((chamado) => chamado.id === id ? atualizado : chamado);
-    } else {
-      const criado = await estado.cliente.criar(dados);
-      estado.chamados = [criado, ...estado.chamados];
-    }
-    estado.erroLista = "";
-    dialogFormulario.close();
-    renderizar();
-    notificar(editando ? "Chamado atualizado." : "Chamado criado com sucesso.");
-  }, (erro) => {
-    Object.keys(erro.campos ?? {}).forEach((nome) => { campos[nome]?.setAttribute("aria-invalid", "true"); });
-    mostrarErro("erro-formulario", mensagemDeErro(erro));
-  }, { botao: porId("salvar-chamado"), rotulo: "Salvando…" });
-});
+  token = tokenDigitado;
+  botaoEnviarToken.disabled = true;
+  botaoEnviarToken.textContent = "Conectando...";
 
-Object.values(campos).forEach((campo) => {
-  campo.addEventListener("input", () => { campo.removeAttribute("aria-invalid"); });
-});
-campos.descricao.addEventListener("input", atualizarContador);
-
-function abrirExclusao(chamado) {
-  estado.chamadoParaExcluir = chamado;
-  porId("nome-exclusao").textContent = "“" + chamado.titulo + "”";
-  mostrarErro("erro-exclusao");
-  dialogExclusao.showModal();
+  try {
+    let resposta = await requisicaoAPI("GET");
+    chamadosArr = resposta && Array.isArray(resposta.dados) ? resposta.dados : [];
+    definirModo("api");
+    fecharDialog(dialogConexao);
+    renderizarChamados();
+    mostrarNotificacao("Conexão realizada com sucesso!");
+  } catch (erro) {
+    token = "";
+    mostrarErro(erroConexao, erro.message);
+  } finally {
+    botaoEnviarToken.disabled = false;
+    botaoEnviarToken.textContent = "Conectar";
+  }
 }
 
-porId("confirmar-exclusao").addEventListener("click", () => {
-  const id = estado.chamadoParaExcluir.id;
-  executar(async () => {
-    await estado.cliente.excluir(id);
-    estado.chamados = estado.chamados.filter((chamado) => chamado.id !== id);
-    estado.erroLista = "";
-    dialogExclusao.close();
-    renderizar();
-    notificar("Chamado excluído.");
-  }, (erro) => { mostrarErro("erro-exclusao", mensagemDeErro(erro)); },
-  { botao: porId("confirmar-exclusao"), rotulo: "Excluindo…" });
+function desconectarAPI() {
+  token = "";
+  chamadosArr = [];
+  campoToken.value = "";
+  definirModo("offline");
+  fecharDialog(dialogConexao);
+  limparErro(erroLista);
+  renderizarChamados();
+  mostrarNotificacao("Você desconectou da API.");
+}
+
+function ativarDemonstracao() {
+  token = "";
+  chamadosArr = dadosDemonstracao.map(function (chamado) {
+    return { ...chamado };
+  });
+  definirModo("demo");
+  limparFiltros();
+  renderizarChamados();
+  mostrarNotificacao("Modo demonstração ativado. Os dados não serão enviados à API.");
+}
+
+function limparFiltros() {
+  campoBuscar.value = "";
+  filtroStatus.value = "";
+  filtroPrioridade.value = "";
+  renderizarChamados();
+}
+
+function abrirFormulario(chamado = null) {
+  if (modoAtual === "offline") {
+    mostrarNotificacao("Conecte-se à API ou abra a demonstração para cadastrar chamados.");
+    abrirConexao();
+    return;
+  }
+
+  chamadoEmEdicao = chamado ? chamado.id : null;
+  limparErro(erroFormulario);
+  formChamado.reset();
+  campoTitulo.removeAttribute("aria-invalid");
+  campoDescricao.removeAttribute("aria-invalid");
+  campoCategoria.removeAttribute("aria-invalid");
+  campoPrioridade.removeAttribute("aria-invalid");
+
+  if (chamado) {
+    tituloFormulario.textContent = "Editar chamado";
+    botaoSalvarChamado.textContent = "Salvar alterações";
+    campoTitulo.value = chamado.titulo || "";
+    campoDescricao.value = chamado.descricao || "";
+    campoCategoria.value = chamado.categoria || "";
+    campoPrioridade.value = chamado.prioridade || "";
+    campoStatus.value = chamado.status || "aberto";
+    campoStatus.disabled = false;
+    rotuloCampoStatus.hidden = false;
+  } else {
+    tituloFormulario.textContent = "Novo chamado";
+    botaoSalvarChamado.textContent = "Criar chamado";
+    campoStatus.value = "aberto";
+    campoStatus.disabled = true;
+    rotuloCampoStatus.hidden = true;
+  }
+
+  atualizarContadorDescricao();
+  fecharDialog(dialogDetalhe);
+  abrirDialog(dialogFormulario);
+}
+
+async function buscarChamadoPorId(id) {
+  if (modoAtual === "demo") {
+    let chamadoDemo = chamadosArr.find(function (item) {
+      return String(item.id) === String(id);
+    });
+
+    if (!chamadoDemo) {
+      throw new Error("Chamado não encontrado.");
+    }
+
+    return { ...chamadoDemo };
+  }
+
+  let resposta = await requisicaoAPI("GET", id);
+  if (!resposta || !resposta.dados) {
+    throw new Error("A API não retornou os dados do chamado.");
+  }
+  return resposta.dados;
+}
+
+async function abrirDetalhe(id) {
+  abrirDialog(dialogDetalhe);
+  carregandoDetalhe.hidden = false;
+  dadosDetalhe.hidden = true;
+  limparErro(erroDetalhe);
+  botaoEditarDetalhe.hidden = true;
+  numeroDetalhe.textContent = `Chamado #${id}`;
+  tituloDetalhe.textContent = "Carregando...";
+
+  try {
+    chamadoEmDetalhe = await buscarChamadoPorId(id);
+    tituloDetalhe.textContent = chamadoEmDetalhe.titulo;
+    numeroDetalhe.textContent = `Chamado #${chamadoEmDetalhe.id}`;
+    definirEtiqueta(statusDetalhe, chamadoEmDetalhe.status, "status");
+    definirEtiqueta(prioridadeDetalhe, chamadoEmDetalhe.prioridade, "prioridade");
+    descricaoDetalhe.textContent = chamadoEmDetalhe.descricao || "Nenhuma descrição informada.";
+    categoriaDetalhe.textContent = rotulos.categoria[chamadoEmDetalhe.categoria] || chamadoEmDetalhe.categoria;
+    criadoDetalhe.textContent = formatarData(chamadoEmDetalhe.criado_em);
+    atualizadoDetalhe.textContent = formatarData(chamadoEmDetalhe.atualizado_em);
+    carregandoDetalhe.hidden = true;
+    dadosDetalhe.hidden = false;
+    botaoEditarDetalhe.hidden = false;
+  } catch (erro) {
+    carregandoDetalhe.hidden = true;
+    mostrarErro(erroDetalhe, erro.message);
+  }
+}
+
+function atualizarContadorDescricao() {
+  tamanhoDescricao.textContent = `${campoDescricao.value.length.toLocaleString("pt-BR")} / 2.000`;
+}
+
+function validarCamposChamado() {
+  let titulo = campoTitulo.value.trim();
+  let descricao = campoDescricao.value;
+  let valido = true;
+
+  campoTitulo.removeAttribute("aria-invalid");
+  campoDescricao.removeAttribute("aria-invalid");
+  campoCategoria.removeAttribute("aria-invalid");
+  campoPrioridade.removeAttribute("aria-invalid");
+  limparErro(erroFormulario);
+
+  if (titulo.length < 1 || titulo.length > 150) {
+    campoTitulo.setAttribute("aria-invalid", "true");
+    mostrarErro(erroFormulario, "Informe um título com 1 a 150 caracteres.");
+    campoTitulo.focus();
+    valido = false;
+  } else if (descricao.length > 2000) {
+    campoDescricao.setAttribute("aria-invalid", "true");
+    mostrarErro(erroFormulario, "A descrição deve ter no máximo 2.000 caracteres.");
+    campoDescricao.focus();
+    valido = false;
+  } else if (!Object.prototype.hasOwnProperty.call(rotulos.categoria, campoCategoria.value)) {
+    campoCategoria.setAttribute("aria-invalid", "true");
+    mostrarErro(erroFormulario, "Selecione uma categoria válida.");
+    campoCategoria.focus();
+    valido = false;
+  } else if (!Object.prototype.hasOwnProperty.call(rotulos.prioridade, campoPrioridade.value)) {
+    campoPrioridade.setAttribute("aria-invalid", "true");
+    mostrarErro(erroFormulario, "Selecione uma prioridade válida.");
+    campoPrioridade.focus();
+    valido = false;
+  } else if (chamadoEmEdicao !== null && !Object.prototype.hasOwnProperty.call(rotulos.status, campoStatus.value)) {
+    campoStatus.setAttribute("aria-invalid", "true");
+    mostrarErro(erroFormulario, "Selecione um status válido.");
+    campoStatus.focus();
+    valido = false;
+  }
+
+  return valido;
+}
+
+async function salvarChamado(evento) {
+  evento.preventDefault();
+
+  if (!validarCamposChamado()) {
+    return;
+  }
+
+  let dadosChamado = {
+    titulo: campoTitulo.value.trim(),
+    descricao: campoDescricao.value.trim(),
+    categoria: campoCategoria.value,
+    prioridade: campoPrioridade.value
+  };
+
+  botaoSalvarChamado.disabled = true;
+  botaoSalvarChamado.textContent = "Salvando...";
+
+  try {
+    if (chamadoEmEdicao === null) {
+      if (modoAtual === "api") {
+        // No cadastro, o status é omitido para a API iniciar o chamado como "aberto".
+        await requisicaoAPI("POST", null, dadosChamado);
+      } else {
+        let novoChamado = {
+          ...dadosChamado,
+          id: `demo-${Date.now()}`,
+          status: "aberto",
+          criado_em: new Date().toISOString(),
+          atualizado_em: new Date().toISOString()
+        };
+        chamadosArr.unshift(novoChamado);
+      }
+      fecharDialog(dialogFormulario);
+      renderizarChamados();
+      mostrarNotificacao("Chamado criado com sucesso!");
+    } else {
+      dadosChamado.status = campoStatus.value;
+
+      if (modoAtual === "api") {
+        await requisicaoAPI("PUT", chamadoEmEdicao, dadosChamado);
+      } else {
+        let indice = chamadosArr.findIndex(function (chamado) {
+          return String(chamado.id) === String(chamadoEmEdicao);
+        });
+        if (indice === -1) {
+          throw new Error("Chamado não encontrado.");
+        }
+        chamadosArr[indice] = {
+          ...chamadosArr[indice],
+          ...dadosChamado,
+          atualizado_em: new Date().toISOString()
+        };
+      }
+      fecharDialog(dialogFormulario);
+      renderizarChamados();
+      mostrarNotificacao("Chamado atualizado com sucesso!");
+    }
+
+    if (modoAtual === "api") {
+      await atualizarChamados();
+    }
+  } catch (erro) {
+    mostrarErro(erroFormulario, erro.message);
+  } finally {
+    botaoSalvarChamado.disabled = false;
+    botaoSalvarChamado.textContent = chamadoEmEdicao === null ? "Criar chamado" : "Salvar alterações";
+  }
+}
+
+function abrirConfirmacaoExclusao(id) {
+  let chamado = chamadosArr.find(function (item) {
+    return String(item.id) === String(id);
+  });
+
+  if (!chamado) {
+    mostrarNotificacao("Não foi possível localizar esse chamado.");
+    return;
+  }
+
+  chamadoParaExcluir = chamado.id;
+  nomeExclusao.textContent = chamado.titulo;
+  limparErro(erroExclusao);
+  abrirDialog(dialogExclusao);
+}
+
+async function excluirChamado() {
+  if (chamadoParaExcluir === null) {
+    return;
+  }
+
+  botaoConfirmarExclusao.disabled = true;
+  botaoConfirmarExclusao.textContent = "Excluindo...";
+
+  try {
+    if (modoAtual === "api") {
+      await requisicaoAPI("DELETE", chamadoParaExcluir);
+    } else {
+      chamadosArr = chamadosArr.filter(function (chamado) {
+        return String(chamado.id) !== String(chamadoParaExcluir);
+      });
+    }
+
+    fecharDialog(dialogExclusao);
+    chamadoParaExcluir = null;
+    renderizarChamados();
+    mostrarNotificacao("Chamado excluído com sucesso!");
+
+    if (modoAtual === "api") {
+      await atualizarChamados();
+    }
+  } catch (erro) {
+    mostrarErro(erroExclusao, erro.message);
+  } finally {
+    botaoConfirmarExclusao.disabled = false;
+    botaoConfirmarExclusao.textContent = "Excluir chamado";
+  }
+}
+
+// Eventos dos botões e formulários
+botaoConectar.addEventListener("click", abrirConexao);
+botaoVazioConectar.addEventListener("click", abrirConexao);
+botaoNovoChamado.addEventListener("click", function () {
+  abrirFormulario();
+});
+botaoVazioNovo.addEventListener("click", function () {
+  abrirFormulario();
+});
+botaoAtualizar.addEventListener("click", atualizarChamados);
+botaoDemonstrar.addEventListener("click", ativarDemonstracao);
+botaoTentarNovamente.addEventListener("click", atualizarChamados);
+botaoDesconectar.addEventListener("click", desconectarAPI);
+formConexao.addEventListener("submit", conectarAPI);
+formChamado.addEventListener("submit", salvarChamado);
+botaoConfirmarExclusao.addEventListener("click", excluirChamado);
+
+campoBuscar.addEventListener("input", renderizarChamados);
+filtroStatus.addEventListener("change", renderizarChamados);
+filtroPrioridade.addEventListener("change", renderizarChamados);
+campoDescricao.addEventListener("input", atualizarContadorDescricao);
+botaoLimparFiltros.addEventListener("click", limparFiltros);
+botaoLimparFiltrosRodape.addEventListener("click", limparFiltros);
+
+botaoEditarDetalhe.addEventListener("click", function () {
+  if (chamadoEmDetalhe) {
+    abrirFormulario(chamadoEmDetalhe);
+  }
 });
 
-porId("lista-chamados").addEventListener("click", (evento) => {
-  const botao = evento.target.closest("button[data-acao]");
-  if (!botao || estado.ocupado) return;
+listaChamados.addEventListener("click", function (evento) {
+  let botao = evento.target.closest("[data-acao]");
+  if (!botao) {
+    return;
+  }
 
-  const id = botao.closest("tr").dataset.id;
-  const chamado = estado.chamados.find((item) => String(item.id) === id);
-  if (!chamado) return;
+  let id = botao.dataset.id;
+  let acao = botao.dataset.acao;
 
-  if (botao.dataset.acao === "excluir") abrirExclusao(chamado);
-  else carregarDetalhe(chamado, botao.dataset.acao === "editar");
+  if (acao === "detalhar") {
+    abrirDetalhe(id);
+  } else if (acao === "editar") {
+    buscarChamadoPorId(id)
+      .then(function (chamado) {
+        abrirFormulario(chamado);
+      })
+      .catch(function (erro) {
+        mostrarNotificacao(erro.message);
+      });
+  } else if (acao === "excluir") {
+    abrirConfirmacaoExclusao(id);
+  }
 });
 
-porId("editar-detalhe").addEventListener("click", () => {
-  dialogDetalhe.close();
-  abrirFormulario(estado.detalhe);
-});
-
-document.querySelectorAll("[data-fechar]").forEach((botao) => {
-  botao.addEventListener("click", () => { botao.closest("dialog").close(); });
-});
-document.querySelectorAll("dialog").forEach((dialogo) => {
-  dialogo.addEventListener("cancel", (evento) => {
-    if (estado.ocupado) evento.preventDefault();
+document.querySelectorAll("[data-fechar]").forEach(function (botao) {
+  botao.addEventListener("click", function () {
+    fecharDialog(botao.closest("dialog"));
   });
 });
 
-porId("conectar").addEventListener("click", abrirConexao);
-porId("vazio-conectar").addEventListener("click", abrirConexao);
-porId("novo-chamado").addEventListener("click", abrirNovoChamado);
-porId("vazio-novo").addEventListener("click", abrirNovoChamado);
-porId("atualizar").addEventListener("click", recarregarLista);
-porId("tentar-novamente").addEventListener("click", recarregarLista);
-porId("limpar-filtros").addEventListener("click", limparFiltros);
-porId("limpar-filtros-rodape").addEventListener("click", limparFiltros);
-filtros.titulo.addEventListener("input", renderizarLista);
-filtros.status.addEventListener("change", renderizarLista);
-filtros.prioridade.addEventListener("change", renderizarLista);
+document.querySelectorAll("dialog").forEach(function (dialog) {
+  dialog.addEventListener("click", function (evento) {
+    if (evento.target === dialog) {
+      fecharDialog(dialog);
+    }
+  });
+});
 
-renderizar();
+// Limites também são aplicados pelo JavaScript, além da validação antes do envio.
+campoTitulo.maxLength = 150;
+campoDescricao.maxLength = 2000;
+
+// Deixa o token fornecido disponível no formulário de conexão.
+campoToken.value = TOKEN_PADRAO;
+
+// Estado inicial da aplicação.
+definirModo("offline");
+renderizarChamados();
+atualizarContadorDescricao();
