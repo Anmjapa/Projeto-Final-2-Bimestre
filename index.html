@@ -61,10 +61,7 @@
         <span><strong>Central de Chamados</strong><small>Fatec Lins · ADS</small></span>
       </a>
       <div class="conexao-topo">
-        <span id="indicador-conexao" class="indicador" data-modo="offline">Sem conexão</span>
-        <button id="conectar" class="botao secundario" type="button" data-ocupado>
-          <svg class="icone" aria-hidden="true"><use href="#i-chave"/></svg><span>Conectar API</span>
-        </button>
+        <span id="indicador-conexao" class="indicador" data-modo="conectando">Conectando à API...</span>
       </div>
     </div>
   </header>
@@ -75,7 +72,7 @@
         <p class="sobretitulo"><span></span> Painel de suporte</p>
         <h1 id="titulo">Central de Chamados</h1>
         <p class="hero-descricao">Registre solicitações de suporte e acompanhe o andamento de cada chamado.</p>
-        <button id="novo-chamado" class="botao hero-botao" type="button" data-ocupado>
+        <button id="novo-chamado" class="botao hero-botao" type="button" data-ocupado disabled>
           <svg class="icone" aria-hidden="true"><use href="#i-mais"/></svg> Novo chamado
         </button>
       </div>
@@ -182,11 +179,9 @@
         </div>
         <div id="lista-vazia" class="estado-lista">
           <span class="estado-icone"><svg class="icone" aria-hidden="true"><use href="#i-ticket"/></svg></span>
-          <h3 id="vazio-titulo">Conecte-se para ver seus chamados</h3>
-          <p id="vazio-descricao">Use o token da atividade ou explore a interface com dados de exemplo.</p>
+          <h3 id="vazio-titulo">Nenhum chamado encontrado</h3>
+          <p id="vazio-descricao">Seus chamados aparecerão aqui.</p>
           <div class="estado-acoes">
-            <button id="vazio-conectar" class="botao primario" type="button" data-ocupado>Conectar API</button>
-            <button id="demonstrar" class="botao secundario" type="button" data-ocupado>Ver demonstração</button>
             <button id="vazio-novo" class="botao primario" type="button" data-ocupado hidden>Novo chamado</button>
             <button id="limpar-filtros" class="botao secundario" type="button" hidden>Limpar filtros</button>
             <button id="tentar-novamente" class="botao secundario" type="button" data-ocupado hidden>Tentar novamente</button>
@@ -240,30 +235,6 @@
     </tr>
   </template>
 
-  <dialog id="dialog-conexao" aria-labelledby="titulo-conexao">
-    <form id="form-conexao">
-      <header class="dialog-topo">
-        <div><p class="dialog-sobretitulo">Acesso</p><h2 id="titulo-conexao">Conectar à API</h2></div>
-        <button type="button" class="botao-icone" aria-label="Fechar" data-fechar data-ocupado>
-          <svg class="icone" aria-hidden="true"><use href="#i-fechar"/></svg>
-        </button>
-      </header>
-      <div class="dialog-corpo">
-        <label class="campo">
-          <span>Token da atividade</span>
-          <input id="token" name="token" type="password" required autocomplete="off" autocapitalize="off"
-                 spellcheck="false" placeholder="Cole o token de 64 caracteres" aria-describedby="ajuda-token" data-ocupado autofocus>
-        </label>
-        <p id="ajuda-token" class="ajuda">Use o token fornecido pelo professor. Ele fica disponível nesta página até recarregar ou desconectar.</p>
-        <p id="erro-conexao" class="erro-inline" role="alert" hidden></p>
-      </div>
-      <footer class="dialog-acoes">
-        <button id="desconectar" type="button" class="botao texto afastado" data-ocupado hidden>Desconectar</button>
-        <button type="button" class="botao secundario" data-fechar data-ocupado>Cancelar</button>
-        <button id="enviar-token" type="submit" class="botao primario" data-ocupado>Conectar</button>
-      </footer>
-    </form>
-  </dialog>
 
   <dialog id="dialog-detalhe" aria-labelledby="titulo-detalhe">
     <header class="dialog-topo">

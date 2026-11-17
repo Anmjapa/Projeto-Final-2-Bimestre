@@ -86,7 +86,6 @@ h1, h2, h3, p { margin: 0; }
   border-radius: 50%;
   background: currentColor;
 }
-.indicador[data-modo="demo"] { color: #6940b3; background: #f2eafd; }
 .indicador[data-modo="api"] { color: #176844; background: #e6f6ec; }
 
 .botao {
@@ -383,3 +382,5 @@ dialog::backdrop { background: #1a1234a1; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+.indicador[data-modo="erro"] { color: #a52842; background: #fce9ed; }

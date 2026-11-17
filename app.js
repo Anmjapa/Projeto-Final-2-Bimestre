@@ -2,10 +2,9 @@
 // Toda a aplicação (interface + comunicação com a API) fica neste arquivo.
 
 const API_URL = "https://felipemaciel.com.br/_fatec/api/central-chamados/chamados";
-const TOKEN_PADRAO = "fd17edc7c76c9779bfa4f584ca1d19068c02059eec22bd0290423608ee4d5f7a";
+const TOKEN = "fd17edc7c76c9779bfa4f584ca1d19068c02059eec22bd0290423608ee4d5f7a";
 
-let token = "";
-let modoAtual = "offline"; // offline, api ou demo
+let conectado = false;
 let chamadosArr = [];
 let chamadoEmEdicao = null;
 let chamadoEmDetalhe = null;
@@ -31,57 +30,15 @@ const rotulos = {
   }
 };
 
-const dadosDemonstracao = [
-  {
-    id: "demo-1",
-    titulo: "Computador do laboratório não liga",
-    descricao: "Ao pressionar o botão de energia, o computador não inicia.",
-    categoria: "hardware",
-    prioridade: "alta",
-    status: "aberto",
-    criado_em: "2026-11-10 08:30:00",
-    atualizado_em: "2026-11-10 08:30:00"
-  },
-  {
-    id: "demo-2",
-    titulo: "Instalação do pacote de escritório",
-    descricao: "Preciso do pacote de escritório instalado para realizar as atividades.",
-    categoria: "software",
-    prioridade: "media",
-    status: "em_andamento",
-    criado_em: "2026-11-08 14:15:00",
-    atualizado_em: "2026-11-09 09:20:00"
-  },
-  {
-    id: "demo-3",
-    titulo: "Conexão de rede instável",
-    descricao: "A conexão cai algumas vezes durante as aulas.",
-    categoria: "rede",
-    prioridade: "baixa",
-    status: "concluido",
-    criado_em: "2026-11-05 19:00:00",
-    atualizado_em: "2026-11-06 10:00:00"
-  }
-];
 
 // Elementos da página
 const indicadorConexao = document.querySelector("#indicador-conexao");
-const botaoConectar = document.querySelector("#conectar");
 const botaoNovoChamado = document.querySelector("#novo-chamado");
 const botaoAtualizar = document.querySelector("#atualizar");
-const botaoDemonstrar = document.querySelector("#demonstrar");
-const botaoVazioConectar = document.querySelector("#vazio-conectar");
 const botaoVazioNovo = document.querySelector("#vazio-novo");
 const botaoTentarNovamente = document.querySelector("#tentar-novamente");
 const botaoLimparFiltros = document.querySelector("#limpar-filtros");
 const botaoLimparFiltrosRodape = document.querySelector("#limpar-filtros-rodape");
-
-const dialogConexao = document.querySelector("#dialog-conexao");
-const formConexao = document.querySelector("#form-conexao");
-const campoToken = document.querySelector("#token");
-const erroConexao = document.querySelector("#erro-conexao");
-const botaoDesconectar = document.querySelector("#desconectar");
-const botaoEnviarToken = document.querySelector("#enviar-token");
 
 const campoBuscar = document.querySelector("#buscar");
 const filtroStatus = document.querySelector("#filtrar-status");
@@ -135,7 +92,7 @@ const notificacao = document.querySelector("#notificacao");
 async function requisicaoAPI(metodo, id = null, dados = null) {
   let url = id === null ? API_URL : `${API_URL}/${encodeURIComponent(id)}`;
   let cabecalhos = {
-    Authorization: `Bearer ${token}`
+    Authorization: `Bearer ${TOKEN}`
   };
 
   let configuracao = {
@@ -228,31 +185,26 @@ function limparErro(elemento) {
   elemento.hidden = true;
 }
 
-function definirModo(modo) {
-  modoAtual = modo;
-
-  if (modo === "api") {
+function definirConexao(estado) {
+  if (estado === "api") {
+    conectado = true;
     indicadorConexao.textContent = "Conectado à API";
     indicadorConexao.dataset.modo = "api";
-    botaoDesconectar.hidden = false;
-    botaoConectar.querySelector("span").textContent = "Conexão";
-  } else if (modo === "demo") {
-    indicadorConexao.textContent = "Modo demonstração";
-    indicadorConexao.dataset.modo = "demo";
-    botaoDesconectar.hidden = true;
-    botaoConectar.querySelector("span").textContent = "Conectar API";
+  } else if (estado === "erro") {
+    conectado = false;
+    indicadorConexao.textContent = "Falha na conexão";
+    indicadorConexao.dataset.modo = "erro";
   } else {
-    indicadorConexao.textContent = "Sem conexão";
-    indicadorConexao.dataset.modo = "offline";
-    botaoDesconectar.hidden = true;
-    botaoConectar.querySelector("span").textContent = "Conectar API";
+    conectado = false;
+    indicadorConexao.textContent = "Conectando à API...";
+    indicadorConexao.dataset.modo = "conectando";
   }
 
-  let conectado = modo !== "offline";
   campoBuscar.disabled = !conectado;
   filtroStatus.disabled = !conectado;
   filtroPrioridade.disabled = !conectado;
   botaoAtualizar.disabled = !conectado;
+  botaoNovoChamado.disabled = !conectado;
 }
 
 function formatarData(data) {
@@ -318,19 +270,6 @@ function renderizarChamados() {
   rodapeLista.hidden = true;
   listaVazia.hidden = false;
 
-  if (modoAtual === "offline") {
-    vazioTitulo.textContent = "Conecte-se para ver seus chamados";
-    vazioDescricao.textContent = "Use o token da atividade ou explore a interface com dados de exemplo.";
-    botaoVazioConectar.hidden = false;
-    botaoDemonstrar.hidden = false;
-    botaoVazioNovo.hidden = true;
-    botaoLimparFiltros.hidden = true;
-    botaoTentarNovamente.hidden = true;
-    return;
-  }
-
-  botaoVazioConectar.hidden = true;
-  botaoDemonstrar.hidden = true;
   botaoTentarNovamente.hidden = true;
 
   if (chamadosFiltrados.length === 0) {
@@ -398,15 +337,14 @@ function mostrarCarregamento() {
 }
 
 function mostrarFalhaNaLista(mensagem) {
+  definirConexao("erro");
   carregandoLista.hidden = true;
   listaVazia.hidden = false;
   envoltoriaTabela.hidden = true;
   rodapeLista.hidden = true;
   resultadoLista.setAttribute("aria-busy", "false");
   vazioTitulo.textContent = "Não foi possível carregar os chamados";
-  vazioDescricao.textContent = "Confira a conexão e tente novamente.";
-  botaoVazioConectar.hidden = true;
-  botaoDemonstrar.hidden = true;
+  vazioDescricao.textContent = "Confira a conexão com a internet e tente novamente.";
   botaoVazioNovo.hidden = true;
   botaoLimparFiltros.hidden = true;
   botaoTentarNovamente.hidden = false;
@@ -414,87 +352,16 @@ function mostrarFalhaNaLista(mensagem) {
 }
 
 async function atualizarChamados() {
-  if (modoAtual === "offline") {
-    renderizarChamados();
-    return;
-  }
-
-  if (modoAtual === "demo") {
-    renderizarChamados();
-    return;
-  }
-
   mostrarCarregamento();
 
   try {
     let resposta = await requisicaoAPI("GET");
     chamadosArr = resposta && Array.isArray(resposta.dados) ? resposta.dados : [];
+    definirConexao("api");
     renderizarChamados();
   } catch (erro) {
     mostrarFalhaNaLista(erro.message);
   }
-}
-
-function abrirConexao() {
-  limparErro(erroConexao);
-  if (!campoToken.value && TOKEN_PADRAO) {
-    campoToken.value = TOKEN_PADRAO;
-  }
-  botaoDesconectar.hidden = modoAtual !== "api";
-  abrirDialog(dialogConexao);
-}
-
-async function conectarAPI(evento) {
-  evento.preventDefault();
-  limparErro(erroConexao);
-
-  let tokenDigitado = campoToken.value.trim();
-  if (!/^[a-fA-F0-9]{64}$/.test(tokenDigitado)) {
-    mostrarErro(erroConexao, "O token deve conter exatamente 64 caracteres hexadecimais.");
-    campoToken.focus();
-    return;
-  }
-
-  token = tokenDigitado;
-  botaoEnviarToken.disabled = true;
-  botaoEnviarToken.textContent = "Conectando...";
-
-  try {
-    let resposta = await requisicaoAPI("GET");
-    chamadosArr = resposta && Array.isArray(resposta.dados) ? resposta.dados : [];
-    definirModo("api");
-    fecharDialog(dialogConexao);
-    renderizarChamados();
-    mostrarNotificacao("Conexão realizada com sucesso!");
-  } catch (erro) {
-    token = "";
-    mostrarErro(erroConexao, erro.message);
-  } finally {
-    botaoEnviarToken.disabled = false;
-    botaoEnviarToken.textContent = "Conectar";
-  }
-}
-
-function desconectarAPI() {
-  token = "";
-  chamadosArr = [];
-  campoToken.value = "";
-  definirModo("offline");
-  fecharDialog(dialogConexao);
-  limparErro(erroLista);
-  renderizarChamados();
-  mostrarNotificacao("Você desconectou da API.");
-}
-
-function ativarDemonstracao() {
-  token = "";
-  chamadosArr = dadosDemonstracao.map(function (chamado) {
-    return { ...chamado };
-  });
-  definirModo("demo");
-  limparFiltros();
-  renderizarChamados();
-  mostrarNotificacao("Modo demonstração ativado. Os dados não serão enviados à API.");
 }
 
 function limparFiltros() {
@@ -505,9 +372,8 @@ function limparFiltros() {
 }
 
 function abrirFormulario(chamado = null) {
-  if (modoAtual === "offline") {
-    mostrarNotificacao("Conecte-se à API ou abra a demonstração para cadastrar chamados.");
-    abrirConexao();
+  if (!conectado) {
+    mostrarNotificacao("Aguarde a conexão com a API para cadastrar chamados.");
     return;
   }
 
@@ -543,18 +409,6 @@ function abrirFormulario(chamado = null) {
 }
 
 async function buscarChamadoPorId(id) {
-  if (modoAtual === "demo") {
-    let chamadoDemo = chamadosArr.find(function (item) {
-      return String(item.id) === String(id);
-    });
-
-    if (!chamadoDemo) {
-      throw new Error("Chamado não encontrado.");
-    }
-
-    return { ...chamadoDemo };
-  }
-
   let resposta = await requisicaoAPI("GET", id);
   if (!resposta || !resposta.dados) {
     throw new Error("A API não retornou os dados do chamado.");
@@ -638,7 +492,7 @@ function validarCamposChamado() {
 async function salvarChamado(evento) {
   evento.preventDefault();
 
-  if (!validarCamposChamado()) {
+  if (!conectado || !validarCamposChamado()) {
     return;
   }
 
@@ -649,53 +503,25 @@ async function salvarChamado(evento) {
     prioridade: campoPrioridade.value
   };
 
+  let estavaEditando = chamadoEmEdicao !== null;
   botaoSalvarChamado.disabled = true;
   botaoSalvarChamado.textContent = "Salvando...";
 
   try {
-    if (chamadoEmEdicao === null) {
-      if (modoAtual === "api") {
-        // No cadastro, o status é omitido para a API iniciar o chamado como "aberto".
-        await requisicaoAPI("POST", null, dadosChamado);
-      } else {
-        let novoChamado = {
-          ...dadosChamado,
-          id: `demo-${Date.now()}`,
-          status: "aberto",
-          criado_em: new Date().toISOString(),
-          atualizado_em: new Date().toISOString()
-        };
-        chamadosArr.unshift(novoChamado);
-      }
-      fecharDialog(dialogFormulario);
-      renderizarChamados();
-      mostrarNotificacao("Chamado criado com sucesso!");
-    } else {
+    if (estavaEditando) {
       dadosChamado.status = campoStatus.value;
-
-      if (modoAtual === "api") {
-        await requisicaoAPI("PUT", chamadoEmEdicao, dadosChamado);
-      } else {
-        let indice = chamadosArr.findIndex(function (chamado) {
-          return String(chamado.id) === String(chamadoEmEdicao);
-        });
-        if (indice === -1) {
-          throw new Error("Chamado não encontrado.");
-        }
-        chamadosArr[indice] = {
-          ...chamadosArr[indice],
-          ...dadosChamado,
-          atualizado_em: new Date().toISOString()
-        };
-      }
-      fecharDialog(dialogFormulario);
-      renderizarChamados();
-      mostrarNotificacao("Chamado atualizado com sucesso!");
+      await requisicaoAPI("PUT", chamadoEmEdicao, dadosChamado);
+    } else {
+      // O status é omitido no cadastro para a API criar o chamado como "aberto".
+      await requisicaoAPI("POST", null, dadosChamado);
     }
 
-    if (modoAtual === "api") {
-      await atualizarChamados();
-    }
+    fecharDialog(dialogFormulario);
+    chamadoEmEdicao = null;
+    mostrarNotificacao(estavaEditando
+      ? "Chamado atualizado com sucesso!"
+      : "Chamado criado com sucesso!");
+    await atualizarChamados();
   } catch (erro) {
     mostrarErro(erroFormulario, erro.message);
   } finally {
@@ -721,7 +547,7 @@ function abrirConfirmacaoExclusao(id) {
 }
 
 async function excluirChamado() {
-  if (chamadoParaExcluir === null) {
+  if (chamadoParaExcluir === null || !conectado) {
     return;
   }
 
@@ -729,22 +555,11 @@ async function excluirChamado() {
   botaoConfirmarExclusao.textContent = "Excluindo...";
 
   try {
-    if (modoAtual === "api") {
-      await requisicaoAPI("DELETE", chamadoParaExcluir);
-    } else {
-      chamadosArr = chamadosArr.filter(function (chamado) {
-        return String(chamado.id) !== String(chamadoParaExcluir);
-      });
-    }
-
+    await requisicaoAPI("DELETE", chamadoParaExcluir);
     fecharDialog(dialogExclusao);
     chamadoParaExcluir = null;
-    renderizarChamados();
     mostrarNotificacao("Chamado excluído com sucesso!");
-
-    if (modoAtual === "api") {
-      await atualizarChamados();
-    }
+    await atualizarChamados();
   } catch (erro) {
     mostrarErro(erroExclusao, erro.message);
   } finally {
@@ -754,8 +569,6 @@ async function excluirChamado() {
 }
 
 // Eventos dos botões e formulários
-botaoConectar.addEventListener("click", abrirConexao);
-botaoVazioConectar.addEventListener("click", abrirConexao);
 botaoNovoChamado.addEventListener("click", function () {
   abrirFormulario();
 });
@@ -763,10 +576,7 @@ botaoVazioNovo.addEventListener("click", function () {
   abrirFormulario();
 });
 botaoAtualizar.addEventListener("click", atualizarChamados);
-botaoDemonstrar.addEventListener("click", ativarDemonstracao);
 botaoTentarNovamente.addEventListener("click", atualizarChamados);
-botaoDesconectar.addEventListener("click", desconectarAPI);
-formConexao.addEventListener("submit", conectarAPI);
 formChamado.addEventListener("submit", salvarChamado);
 botaoConfirmarExclusao.addEventListener("click", excluirChamado);
 
@@ -825,10 +635,8 @@ document.querySelectorAll("dialog").forEach(function (dialog) {
 campoTitulo.maxLength = 150;
 campoDescricao.maxLength = 2000;
 
-// Deixa o token fornecido disponível no formulário de conexão.
-campoToken.value = TOKEN_PADRAO;
-
-// Estado inicial da aplicação.
-definirModo("offline");
-renderizarChamados();
+// A aplicação já inicia conectando à API com o token fornecido.
+definirConexao("conectando");
+mostrarCarregamento();
 atualizarContadorDescricao();
+atualizarChamados();
